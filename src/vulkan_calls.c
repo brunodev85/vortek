@@ -21,7 +21,7 @@ static pthread_mutex_t vt_call_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 #define VT_CALL_LOCK() pthread_mutex_lock(&vt_call_mutex)
 #define VT_CALL_UNLOCK() \
-    vt_free(&globalMemoryPool); \
+    mp_free(&globalMemoryPool); \
     pthread_mutex_unlock(&vt_call_mutex);
 
 static VkResult waitForPipelineCreation(int pipelineCount, VkPipeline* pPipelines) {
@@ -585,30 +585,8 @@ VkResult vt_call_vkGetFenceStatus(VkDevice device, VkFence fence) {
 }
 
 VkResult vt_call_vkWaitForFences(VkDevice device, uint32_t fenceCount, const VkFence* pFences, VkBool32 waitAll, uint64_t timeout) {
-    VT_CALL_LOCK();
     VkObject* deviceObject = VkObject_fromHandle(device);
-
-    VT_SERIALIZE_CMD(vkWaitForFences, (VkDevice)&deviceObject->id, fenceCount, pFences, waitAll, timeout);
-    VT_SEND_CHECKED(REQUEST_CODE_VK_WAIT_FOR_FENCES, VT_RETURN);
-    
-    if (timeout == 0) {
-        VT_RECV_CHECKED(VT_RETURN);
-        
-        VT_CALL_UNLOCK();
-        return (VkResult)result;   
-    }
-    else {
-        int fds[fenceCount];
-        int result, numFds;
-        recv_fds(serverFd, fds, &numFds, &result, sizeof(VkResult));
-        VT_CALL_UNLOCK();
-        
-        if (numFds == 0 || result != VK_SUCCESS) return VK_ERROR_DEVICE_LOST;
-        int timeoutMs = timeout != UINT64_MAX ? timeout / 1000000 : 0;
-        result = waitForEvents(fds, numFds, waitAll ? true : false, timeoutMs);
-        for (int i = 0; i < numFds; i++) CLOSEFD(fds[i]);
-        return result == EVENT_RESULT_TIMEOUT ? VK_TIMEOUT : (result == EVENT_RESULT_SUCCESS ? VK_SUCCESS : VK_ERROR_DEVICE_LOST);
-    } 
+    VT_WAIT_FOR_OBJECT(REQUEST_CODE_VK_WAIT_FOR_FENCES, vkWaitForFences, (VkDevice)&deviceObject->id, fenceCount, pFences, waitAll, timeout);
 }
 
 VkResult vt_call_vkCreateSemaphore(VkDevice device, const VkSemaphoreCreateInfo* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkSemaphore* pSemaphore) {
@@ -2501,22 +2479,8 @@ VkResult vt_call_vkGetSemaphoreCounterValue(VkDevice device, VkSemaphore semapho
 }
 
 VkResult vt_call_vkWaitSemaphores(VkDevice device, const VkSemaphoreWaitInfo* pWaitInfo, uint64_t timeout) {
-    VT_CALL_LOCK();
     VkObject* deviceObject = VkObject_fromHandle(device);
-
-    VT_SERIALIZE_CMD(vkWaitSemaphores, (VkDevice)&deviceObject->id, pWaitInfo, timeout);
-    VT_SEND_CHECKED(REQUEST_CODE_VK_WAIT_SEMAPHORES, VT_RETURN);
-    
-    int numFds, fd;
-    recv_fds(serverFd, &fd, &numFds, NULL, 0);
-    VT_CALL_UNLOCK();
-    
-    uint64_t value = 0;
-    int bytesRead = read(fd, &value, sizeof(uint64_t));
-    CLOSEFD(fd);
-    if (bytesRead != sizeof(uint64_t)) return VK_ERROR_DEVICE_LOST;
-    
-    return value == 1 ? VK_SUCCESS : (value == 2 ? VK_ERROR_DEVICE_LOST : VK_ERROR_UNKNOWN);
+    VT_WAIT_FOR_OBJECT(REQUEST_CODE_VK_WAIT_SEMAPHORES, vkWaitSemaphores, (VkDevice)&deviceObject->id, pWaitInfo, timeout);
 }
 
 VkResult vt_call_vkSignalSemaphore(VkDevice device, const VkSemaphoreSignalInfo* pSignalInfo) {
