@@ -10,7 +10,7 @@ uint16_t maxClientRequestId = 1;
 MemoryPool globalMemoryPool = {0};
 RingBuffer* serverRing = NULL;
 RingBuffer* clientRing = NULL;
-NotifyFdPool notifyFdPool = {0};
+RingBufferPool globalRingPool[RING_POOL_ARRAY_LEN] = {0};
 
 static int vortekServerConnect() {
     int fd = socket(AF_UNIX, SOCK_STREAM, 0);
@@ -45,21 +45,25 @@ static bool createVkContext() {
     int res = write(serverFd, header, HEADER_SIZE);
     if (res < 0) return false;
 
-    int fds[2 + MAX_NOTIFY_FDS];
+    int shmFds[2 + RING_POOL_ARRAY_LEN];
     int numFds;
-    recv_fds(serverFd, fds, &numFds, NULL, 0);
-    if (numFds != ARRAY_SIZE(fds)) return false;
+    recv_fds(serverFd, shmFds, &numFds, NULL, 0);
+    if (numFds != ARRAY_SIZE(shmFds)) return false;
 
-    serverRing = RingBuffer_create(fds[0], SERVER_RING_BUFFER_SIZE);
+    serverRing = RingBuffer_create(shmFds[0], SERVER_RING_BUFFER_SIZE);
     if (!serverRing) return false;
 
-    clientRing = RingBuffer_create(fds[1], CLIENT_RING_BUFFER_SIZE);
+    clientRing = RingBuffer_create(shmFds[1], CLIENT_RING_BUFFER_SIZE);
     if (!clientRing) return false;
 
-    NotifyFdPool_create(&notifyFdPool, fds + 2);
+    for (int i = 0; i < RING_POOL_ARRAY_LEN; i++) {
+        globalRingPool[i].ring = RingBuffer_create(shmFds[2+i], RING_POOL_BUFFER_SIZE);
+        globalRingPool[i].ring->useSemaphores = true;
+        globalRingPool[i].acquired = false;
+        if (!globalRingPool[i].ring) return false;
+    }
 
-    close(fds[0]);
-    close(fds[1]);
+    for (int i = 0; i < ARRAY_SIZE(shmFds); i++) close(shmFds[i]);
 
     mp_init(&globalMemoryPool, MEMORY_POOL_MAX_SIZE);
     return true;
@@ -70,7 +74,10 @@ static void terminationCallback() {
     if (serverRing) RingBuffer_free(serverRing);
     if (clientRing) RingBuffer_free(clientRing);
 
-    NotifyFdPool_destroy(&notifyFdPool);
+    for (int i = 0; i < RING_POOL_ARRAY_LEN; i++) {
+        if (globalRingPool[i].ring) RingBuffer_free(globalRingPool[i].ring);
+    }
+
     mp_free(&globalMemoryPool);
     MEMFREE(globalMemoryPool.data);
 }
