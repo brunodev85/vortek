@@ -24,20 +24,12 @@ static pthread_mutex_t vt_call_mutex = PTHREAD_MUTEX_INITIALIZER;
     mp_free(&globalMemoryPool); \
     pthread_mutex_unlock(&vt_call_mutex);
 
-static VkResult waitForPipelineCreation(int pipelineCount, VkPipeline* pPipelines) {
-    int numFds, fd;
-    char success = 0;
-    recv_fds(serverFd, &fd, &numFds, &success, 1);
-    VT_CALL_UNLOCK();
-
-    if (!success || numFds != 1) return VK_ERROR_DEVICE_LOST;
-
+static VkResult waitForPipelineCreation(ringid_t ringId, int pipelineCount, VkPipeline* pPipelines) {
     int bufferSize = sizeof(VkResult) + pipelineCount * VK_HANDLE_BYTE_COUNT;
     char inputBuffer[bufferSize];
 
-    int bytesRead = read(fd, inputBuffer, bufferSize);
-    CLOSEFD(fd);
-    if (bytesRead != bufferSize) return VK_ERROR_DEVICE_LOST;
+    if (!RingBuffer_read(globalRingPool[ringId].ring, inputBuffer, bufferSize)) return VK_ERROR_DEVICE_LOST;
+    globalRingPool[ringId].acquired = false;
 
     int result = *(int*)(inputBuffer + 0);
     for (int i = 0, j = sizeof(VkResult); i < pipelineCount; i++, j += VK_HANDLE_BYTE_COUNT) {
@@ -960,10 +952,19 @@ VkResult vt_call_vkCreateGraphicsPipelines(VkDevice device, VkPipelineCache pipe
     VkObject* deviceObject = VkObject_fromHandle(device);
     VkObject* pipelineCacheObject = VkObject_fromHandle(pipelineCache);
 
-    VT_SERIALIZE_CMD(vkCreateGraphicsPipelines, (VkDevice)&deviceObject->id, (VkPipelineCache)&pipelineCacheObject->id, createInfoCount, pCreateInfos, NULL, NULL);
+    ringid_t ringId = RingBufferPool_acquire(globalRingPool);
+    if (ringId == RING_ID_INVALID) {
+        VT_CALL_UNLOCK();
+        return VK_ERROR_DEVICE_LOST;
+    }
+    int bufferSize = vt_sizeof_vkCreateGraphicsPipelines((VkDevice)&deviceObject->id, (VkPipelineCache)&pipelineCacheObject->id, createInfoCount, pCreateInfos, NULL, NULL) + sizeof(ringid_t);
+    char* outputBuffer = mp_alloc(&globalMemoryPool, bufferSize);
+    *(ringid_t*)(outputBuffer + 0) = ringId;
+    vt_serialize_vkCreateGraphicsPipelines((VkDevice)&deviceObject->id, (VkPipelineCache)&pipelineCacheObject->id, createInfoCount, pCreateInfos, NULL, NULL, outputBuffer + sizeof(ringid_t));    
     VT_SEND_CHECKED(REQUEST_CODE_VK_CREATE_GRAPHICS_PIPELINES, VT_RETURN);
+    VT_CALL_UNLOCK();
 
-    return waitForPipelineCreation(createInfoCount, pPipelines);
+    return waitForPipelineCreation(ringId, createInfoCount, pPipelines);
 }
 
 VkResult vt_call_vkCreateComputePipelines(VkDevice device, VkPipelineCache pipelineCache, uint32_t createInfoCount, const VkComputePipelineCreateInfo* pCreateInfos, const VkAllocationCallbacks* pAllocator, VkPipeline* pPipelines) {
@@ -971,10 +972,19 @@ VkResult vt_call_vkCreateComputePipelines(VkDevice device, VkPipelineCache pipel
     VkObject* deviceObject = VkObject_fromHandle(device);
     VkObject* pipelineCacheObject = VkObject_fromHandle(pipelineCache);
 
-    VT_SERIALIZE_CMD(vkCreateComputePipelines, (VkDevice)&deviceObject->id, (VkPipelineCache)&pipelineCacheObject->id, createInfoCount, pCreateInfos, NULL, NULL);
+    ringid_t ringId = RingBufferPool_acquire(globalRingPool);
+    if (ringId == RING_ID_INVALID) {
+        VT_CALL_UNLOCK();
+        return VK_ERROR_DEVICE_LOST;
+    }
+    int bufferSize = vt_sizeof_vkCreateComputePipelines((VkDevice)&deviceObject->id, (VkPipelineCache)&pipelineCacheObject->id, createInfoCount, pCreateInfos, NULL, NULL) + sizeof(ringid_t);
+    char* outputBuffer = mp_alloc(&globalMemoryPool, bufferSize);
+    *(ringid_t*)(outputBuffer + 0) = ringId;
+    vt_serialize_vkCreateComputePipelines((VkDevice)&deviceObject->id, (VkPipelineCache)&pipelineCacheObject->id, createInfoCount, pCreateInfos, NULL, NULL, outputBuffer + sizeof(ringid_t));
     VT_SEND_CHECKED(REQUEST_CODE_VK_CREATE_COMPUTE_PIPELINES, VT_RETURN);
+    VT_CALL_UNLOCK();
 
-    return waitForPipelineCreation(createInfoCount, pPipelines);
+    return waitForPipelineCreation(ringId, createInfoCount, pPipelines);
 }
 
 void vt_call_vkDestroyPipeline(VkDevice device, VkPipeline pipeline, const VkAllocationCallbacks* pAllocator) {
@@ -1844,18 +1854,27 @@ VkResult vt_call_vkAcquireNextImageKHR(VkDevice device, VkSwapchainKHR swapchain
     VkObject* swapchainObject = VkObject_fromHandle(swapchain);
     VkObject* semaphoreObject = VkObject_fromHandle(semaphore);
     VkObject* fenceObject = VkObject_fromHandle(fence);
- 
-    VT_SERIALIZE_CMD(vkAcquireNextImageKHR, (VkDevice)&deviceObject->id, (VkSwapchainKHR)&swapchainObject->id, timeout, (VkSemaphore)&semaphoreObject->id, (VkFence)&fenceObject->id, NULL);
-    VT_SEND_CHECKED(REQUEST_CODE_VK_ACQUIRE_NEXT_IMAGE_KHR, VT_RETURN);
-    VT_RECV_CHECKED(VT_RETURN);
-
-    if (result >= 0 && result <= 10) {
-        *pImageIndex = result;
-        result = VK_SUCCESS;
+    
+    ringid_t ringId = RingBufferPool_acquire(globalRingPool);
+    if (ringId == RING_ID_INVALID) {
+        VT_CALL_UNLOCK();
+        return VK_ERROR_DEVICE_LOST;
     }
+    int bufferSize = vt_sizeof_vkAcquireNextImageKHR((VkDevice)&deviceObject->id, (VkSwapchainKHR)&swapchainObject->id, timeout, (VkSemaphore)&semaphoreObject->id, (VkFence)&fenceObject->id, NULL) + sizeof(ringid_t);
+    char* outputBuffer = mp_alloc(&globalMemoryPool, bufferSize);
+    *(ringid_t*)(outputBuffer + 0) = ringId;
+    vt_serialize_vkAcquireNextImageKHR((VkDevice)&deviceObject->id, (VkSwapchainKHR)&swapchainObject->id, timeout, (VkSemaphore)&semaphoreObject->id, (VkFence)&fenceObject->id, NULL, outputBuffer + sizeof(ringid_t));
 
+    VT_SEND_CHECKED(REQUEST_CODE_VK_ACQUIRE_NEXT_IMAGE_KHR, VT_RETURN);
     VT_CALL_UNLOCK();
-    return (VkResult)result;
+
+    char inputBuffer[8];
+    if (!RingBuffer_read(globalRingPool[ringId].ring, inputBuffer, sizeof(inputBuffer))) return VK_ERROR_DEVICE_LOST;
+    globalRingPool[ringId].acquired = false;
+
+    VkResult result = *(int*)(inputBuffer + 0);
+    *pImageIndex = *(int*)(inputBuffer + 4);
+    return result;
 }
 
 VkResult vt_call_vkQueuePresentKHR(VkQueue queue, const VkPresentInfoKHR* pPresentInfo) {
@@ -1864,14 +1883,17 @@ VkResult vt_call_vkQueuePresentKHR(VkQueue queue, const VkPresentInfoKHR* pPrese
     VT_SERIALIZE_CMD(VkPresentInfoKHR, pPresentInfo);
     VT_SEND_CHECKED(REQUEST_CODE_VK_QUEUE_PRESENT_KHR, VT_RETURN);
     
+    VkResult result = VK_SUCCESS;
+    if (RingBuffer_hasStatus(clientRing, SWAPCHAIN_STATUS_SUBOPTIMAL)) result = VK_SUBOPTIMAL_KHR;
+    
     if (pPresentInfo->pResults) {
         for (int i = 0; i < pPresentInfo->swapchainCount; i++) {
-            pPresentInfo->pResults[i] = VK_SUCCESS;
+            pPresentInfo->pResults[i] = result;
         }
     }
     
     VT_CALL_UNLOCK();
-    return VK_SUCCESS;
+    return result;
 }
 
 VkResult vt_call_vkCreateXlibSurfaceKHR(VkInstance instance, const VkXlibSurfaceCreateInfoKHR* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkSurfaceKHR* pSurface) {
@@ -2155,18 +2177,26 @@ VkResult vt_call_vkGetDeviceGroupSurfacePresentModesKHR(VkDevice device, VkSurfa
 
 VkResult vt_call_vkAcquireNextImage2KHR(VkDevice device, const VkAcquireNextImageInfoKHR* pAcquireInfo, uint32_t* pImageIndex) {
     VT_CALL_LOCK();
- 
-    VT_SERIALIZE_CMD(VkAcquireNextImageInfoKHR, pAcquireInfo);
-    VT_SEND_CHECKED(REQUEST_CODE_VK_ACQUIRE_NEXT_IMAGE2_KHR, VT_RETURN);
-    VT_RECV_CHECKED(VT_RETURN);
-
-    if (result >= 0 && result <= 10) {
-        *pImageIndex = result;
-        result = VK_SUCCESS;
+    ringid_t ringId = RingBufferPool_acquire(globalRingPool);
+    if (ringId == RING_ID_INVALID) {
+        VT_CALL_UNLOCK();
+        return VK_ERROR_DEVICE_LOST;
     }
+    int bufferSize = vt_sizeof_VkAcquireNextImageInfoKHR(pAcquireInfo) + sizeof(ringid_t);
+    char* outputBuffer = mp_alloc(&globalMemoryPool, bufferSize);
+    *(ringid_t*)(outputBuffer + 0) = ringId;
+    vt_serialize_VkAcquireNextImageInfoKHR(pAcquireInfo, outputBuffer + sizeof(ringid_t));
 
+    VT_SEND_CHECKED(REQUEST_CODE_VK_ACQUIRE_NEXT_IMAGE2_KHR, VT_RETURN);
     VT_CALL_UNLOCK();
-    return (VkResult)result;
+
+    char inputBuffer[8];
+    if (!RingBuffer_read(globalRingPool[ringId].ring, inputBuffer, sizeof(inputBuffer))) return VK_ERROR_DEVICE_LOST;
+    globalRingPool[ringId].acquired = false;
+
+    VkResult result = *(int*)(inputBuffer + 0);
+    *pImageIndex = *(int*)(inputBuffer + 4);
+    return result;
 }
 
 void vt_call_vkCmdDispatchBase(VkCommandBuffer commandBuffer, uint32_t baseGroupX, uint32_t baseGroupY, uint32_t baseGroupZ, uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ) {
@@ -2878,6 +2908,7 @@ void vt_call_vkDestroyPrivateDataSlot(VkDevice device, VkPrivateDataSlot private
     ArrayList* dataList = privateDataSlotObject->tag;
     
     ArrayList_free(dataList, true);
+    MEMFREE(dataList);
     VkObject_free(privateDataSlotObject);
     VT_CALL_UNLOCK();
 }
