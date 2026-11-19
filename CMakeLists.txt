@@ -5,7 +5,8 @@ message("Building ${PROJECT_NAME}")
 
 set(CMAKE_VERBOSE_MAKEFILE on)
 set(WARNS "-Wall -Wno-discarded-qualifiers")
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O2 ${WARNS} -DVK_USE_PLATFORM_XLIB_KHR")
+set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl,--version-script=${CMAKE_SOURCE_DIR}/export_symbols")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O2 -Wl,-Bsymbolic ${WARNS} -DVK_USE_PLATFORM_XLIB_KHR")
 
 include_directories(include)
 
