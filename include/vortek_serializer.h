@@ -6366,6 +6366,33 @@ static inline void vt_unserialize_VkPhysicalDeviceShaderModuleIdentifierProperti
     bufferOffset += VK_UUID_SIZE;
 }
 
+static inline int vt_sizeof_VkPhysicalDeviceGraphicsPipelineLibraryPropertiesEXT(VkPhysicalDeviceGraphicsPipelineLibraryPropertiesEXT* val) {
+    return 12;
+}
+
+static inline void vt_serialize_VkPhysicalDeviceGraphicsPipelineLibraryPropertiesEXT(VkPhysicalDeviceGraphicsPipelineLibraryPropertiesEXT* val, char* outputBuffer) {
+    int bufferOffset = 0;
+    *(VkStructureType*)(outputBuffer + bufferOffset) = val->sType;
+    bufferOffset += 4;
+    *(VkBool32*)(outputBuffer + bufferOffset) = val->graphicsPipelineLibraryFastLinking;
+    bufferOffset += 4;
+    *(VkBool32*)(outputBuffer + bufferOffset) = val->graphicsPipelineLibraryIndependentInterpolationDecoration;
+    bufferOffset += 4;
+}
+
+static inline void vt_unserialize_VkPhysicalDeviceGraphicsPipelineLibraryPropertiesEXT(VkPhysicalDeviceGraphicsPipelineLibraryPropertiesEXT* val, char* inputBuffer, MemoryPool* memoryPool) {
+    int bufferOffset = 0;
+    val->sType = *(VkStructureType*)(inputBuffer + bufferOffset);
+    bufferOffset += 4;
+#ifdef VT_SERVER
+    val->pNext = NULL;
+#endif
+    val->graphicsPipelineLibraryFastLinking = *(VkBool32*)(inputBuffer + bufferOffset);
+    bufferOffset += 4;
+    val->graphicsPipelineLibraryIndependentInterpolationDecoration = *(VkBool32*)(inputBuffer + bufferOffset);
+    bufferOffset += 4;
+}
+
 static inline int vt_sizeof_VkPhysicalDeviceShaderIntegerDotProductProperties(VkPhysicalDeviceShaderIntegerDotProductProperties* val) {
     return 124;
 }
@@ -8031,6 +8058,29 @@ static inline void vt_unserialize_VkPhysicalDeviceShaderModuleIdentifierFeatures
     val->pNext = NULL;
 #endif
     val->shaderModuleIdentifier = *(VkBool32*)(inputBuffer + bufferOffset);
+    bufferOffset += 4;
+}
+
+static inline int vt_sizeof_VkPhysicalDeviceGraphicsPipelineLibraryFeaturesEXT(VkPhysicalDeviceGraphicsPipelineLibraryFeaturesEXT* val) {
+    return 8;
+}
+
+static inline void vt_serialize_VkPhysicalDeviceGraphicsPipelineLibraryFeaturesEXT(VkPhysicalDeviceGraphicsPipelineLibraryFeaturesEXT* val, char* outputBuffer) {
+    int bufferOffset = 0;
+    *(VkStructureType*)(outputBuffer + bufferOffset) = val->sType;
+    bufferOffset += 4;
+    *(VkBool32*)(outputBuffer + bufferOffset) = val->graphicsPipelineLibrary;
+    bufferOffset += 4;
+}
+
+static inline void vt_unserialize_VkPhysicalDeviceGraphicsPipelineLibraryFeaturesEXT(VkPhysicalDeviceGraphicsPipelineLibraryFeaturesEXT* val, char* inputBuffer, MemoryPool* memoryPool) {
+    int bufferOffset = 0;
+    val->sType = *(VkStructureType*)(inputBuffer + bufferOffset);
+    bufferOffset += 4;
+#ifdef VT_SERVER
+    val->pNext = NULL;
+#endif
+    val->graphicsPipelineLibrary = *(VkBool32*)(inputBuffer + bufferOffset);
     bufferOffset += 4;
 }
 
@@ -11476,6 +11526,11 @@ static inline int vt_sizeof_VkPhysicalDeviceFeatures2(VkPhysicalDeviceFeatures2*
                 bufferSize += vt_sizeof_VkPhysicalDeviceDynamicRenderingFeatures((VkPhysicalDeviceDynamicRenderingFeatures*)pNext);
                 break;
             }
+            case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_GRAPHICS_PIPELINE_LIBRARY_FEATURES_EXT: {
+                bufferSize += 4;
+                bufferSize += vt_sizeof_VkPhysicalDeviceGraphicsPipelineLibraryFeaturesEXT((VkPhysicalDeviceGraphicsPipelineLibraryFeaturesEXT*)pNext);
+                break;
+            }
             case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_MODULE_IDENTIFIER_FEATURES_EXT: {
                 bufferSize += 4;
                 bufferSize += vt_sizeof_VkPhysicalDeviceShaderModuleIdentifierFeaturesEXT((VkPhysicalDeviceShaderModuleIdentifierFeaturesEXT*)pNext);
@@ -11919,6 +11974,14 @@ static inline void vt_serialize_VkPhysicalDeviceFeatures2(VkPhysicalDeviceFeatur
                     *(int*)(outputBuffer + bufferOffset) = itemSize;
                     bufferOffset += 4;
                     vt_serialize_VkPhysicalDeviceDynamicRenderingFeatures((VkPhysicalDeviceDynamicRenderingFeatures*)pNext, outputBuffer + bufferOffset);
+                    bufferOffset += itemSize;
+                    break;
+                }
+                case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_GRAPHICS_PIPELINE_LIBRARY_FEATURES_EXT: {
+                    int itemSize = vt_sizeof_VkPhysicalDeviceGraphicsPipelineLibraryFeaturesEXT((VkPhysicalDeviceGraphicsPipelineLibraryFeaturesEXT*)pNext);
+                    *(int*)(outputBuffer + bufferOffset) = itemSize;
+                    bufferOffset += 4;
+                    vt_serialize_VkPhysicalDeviceGraphicsPipelineLibraryFeaturesEXT((VkPhysicalDeviceGraphicsPipelineLibraryFeaturesEXT*)pNext, outputBuffer + bufferOffset);
                     bufferOffset += itemSize;
                     break;
                 }
@@ -12788,6 +12851,22 @@ static inline void vt_unserialize_VkPhysicalDeviceFeatures2(VkPhysicalDeviceFeat
                 }
                 break;
             }
+            case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_GRAPHICS_PIPELINE_LIBRARY_FEATURES_EXT: {
+                int itemSize = *(int*)(inputBuffer + bufferOffset);
+                bufferOffset += 4;
+                if (itemSize > 0) {
+                    VkPhysicalDeviceGraphicsPipelineLibraryFeaturesEXT* item = !pNextIsNULL ? findNextVkStructure(val->pNext, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_GRAPHICS_PIPELINE_LIBRARY_FEATURES_EXT) : NULL;
+                    if (!item) item = mp_alloc(memoryPool, sizeof(VkPhysicalDeviceGraphicsPipelineLibraryFeaturesEXT));
+                    vt_unserialize_VkPhysicalDeviceGraphicsPipelineLibraryFeaturesEXT(item, inputBuffer + bufferOffset, memoryPool);
+                    bufferOffset += itemSize;
+
+                    if (pNextIsNULL) {
+                        item->pNext = pNext;
+                        pNext = item;
+                    }
+                }
+                break;
+            }
             case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_MODULE_IDENTIFIER_FEATURES_EXT: {
                 int itemSize = *(int*)(inputBuffer + bufferOffset);
                 bufferOffset += 4;
@@ -12992,6 +13071,11 @@ static inline int vt_sizeof_VkPhysicalDeviceProperties2(VkPhysicalDeviceProperti
             case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_INTEGER_DOT_PRODUCT_PROPERTIES: {
                 bufferSize += 4;
                 bufferSize += vt_sizeof_VkPhysicalDeviceShaderIntegerDotProductProperties((VkPhysicalDeviceShaderIntegerDotProductProperties*)pNext);
+                break;
+            }
+            case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_GRAPHICS_PIPELINE_LIBRARY_PROPERTIES_EXT: {
+                bufferSize += 4;
+                bufferSize += vt_sizeof_VkPhysicalDeviceGraphicsPipelineLibraryPropertiesEXT((VkPhysicalDeviceGraphicsPipelineLibraryPropertiesEXT*)pNext);
                 break;
             }
             case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_MODULE_IDENTIFIER_PROPERTIES_EXT: {
@@ -13269,6 +13353,14 @@ static inline void vt_serialize_VkPhysicalDeviceProperties2(VkPhysicalDeviceProp
                     *(int*)(outputBuffer + bufferOffset) = itemSize;
                     bufferOffset += 4;
                     vt_serialize_VkPhysicalDeviceShaderIntegerDotProductProperties((VkPhysicalDeviceShaderIntegerDotProductProperties*)pNext, outputBuffer + bufferOffset);
+                    bufferOffset += itemSize;
+                    break;
+                }
+                case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_GRAPHICS_PIPELINE_LIBRARY_PROPERTIES_EXT: {
+                    int itemSize = vt_sizeof_VkPhysicalDeviceGraphicsPipelineLibraryPropertiesEXT((VkPhysicalDeviceGraphicsPipelineLibraryPropertiesEXT*)pNext);
+                    *(int*)(outputBuffer + bufferOffset) = itemSize;
+                    bufferOffset += 4;
+                    vt_serialize_VkPhysicalDeviceGraphicsPipelineLibraryPropertiesEXT((VkPhysicalDeviceGraphicsPipelineLibraryPropertiesEXT*)pNext, outputBuffer + bufferOffset);
                     bufferOffset += itemSize;
                     break;
                 }
@@ -13793,6 +13885,22 @@ static inline void vt_unserialize_VkPhysicalDeviceProperties2(VkPhysicalDevicePr
                     VkPhysicalDeviceShaderIntegerDotProductProperties* item = !pNextIsNULL ? findNextVkStructure(val->pNext, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_INTEGER_DOT_PRODUCT_PROPERTIES) : NULL;
                     if (!item) item = mp_alloc(memoryPool, sizeof(VkPhysicalDeviceShaderIntegerDotProductProperties));
                     vt_unserialize_VkPhysicalDeviceShaderIntegerDotProductProperties(item, inputBuffer + bufferOffset, memoryPool);
+                    bufferOffset += itemSize;
+
+                    if (pNextIsNULL) {
+                        item->pNext = pNext;
+                        pNext = item;
+                    }
+                }
+                break;
+            }
+            case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_GRAPHICS_PIPELINE_LIBRARY_PROPERTIES_EXT: {
+                int itemSize = *(int*)(inputBuffer + bufferOffset);
+                bufferOffset += 4;
+                if (itemSize > 0) {
+                    VkPhysicalDeviceGraphicsPipelineLibraryPropertiesEXT* item = !pNextIsNULL ? findNextVkStructure(val->pNext, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_GRAPHICS_PIPELINE_LIBRARY_PROPERTIES_EXT) : NULL;
+                    if (!item) item = mp_alloc(memoryPool, sizeof(VkPhysicalDeviceGraphicsPipelineLibraryPropertiesEXT));
+                    vt_unserialize_VkPhysicalDeviceGraphicsPipelineLibraryPropertiesEXT(item, inputBuffer + bufferOffset, memoryPool);
                     bufferOffset += itemSize;
 
                     if (pNextIsNULL) {
@@ -17438,6 +17546,29 @@ static inline void vt_unserialize_VkSubmitInfo2(VkSubmitInfo2* val, char* inputB
     else val->pSignalSemaphoreInfos = NULL;
 }
 
+static inline int vt_sizeof_VkGraphicsPipelineLibraryCreateInfoEXT(VkGraphicsPipelineLibraryCreateInfoEXT* val) {
+    return 8;
+}
+
+static inline void vt_serialize_VkGraphicsPipelineLibraryCreateInfoEXT(VkGraphicsPipelineLibraryCreateInfoEXT* val, char* outputBuffer) {
+    int bufferOffset = 0;
+    *(VkStructureType*)(outputBuffer + bufferOffset) = val->sType;
+    bufferOffset += 4;
+    *(VkGraphicsPipelineLibraryFlagsEXT*)(outputBuffer + bufferOffset) = val->flags;
+    bufferOffset += 4;
+}
+
+static inline void vt_unserialize_VkGraphicsPipelineLibraryCreateInfoEXT(VkGraphicsPipelineLibraryCreateInfoEXT* val, char* inputBuffer, MemoryPool* memoryPool) {
+    int bufferOffset = 0;
+    val->sType = *(VkStructureType*)(inputBuffer + bufferOffset);
+    bufferOffset += 4;
+#ifdef VT_SERVER
+    val->pNext = NULL;
+#endif
+    val->flags = *(VkGraphicsPipelineLibraryFlagsEXT*)(inputBuffer + bufferOffset);
+    bufferOffset += 4;
+}
+
 static inline int vt_sizeof_VkSamplerBorderColorComponentMappingCreateInfoEXT(VkSamplerBorderColorComponentMappingCreateInfoEXT* val) {
     int bufferSize = 8;
     bufferSize += vt_sizeof_VkComponentMapping(&val->components);
@@ -18906,6 +19037,11 @@ static inline int vt_sizeof_VkDeviceCreateInfo(VkDeviceCreateInfo* val) {
                 bufferSize += vt_sizeof_VkPhysicalDeviceDynamicRenderingFeatures((VkPhysicalDeviceDynamicRenderingFeatures*)pNext);
                 break;
             }
+            case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_GRAPHICS_PIPELINE_LIBRARY_FEATURES_EXT: {
+                bufferSize += 4;
+                bufferSize += vt_sizeof_VkPhysicalDeviceGraphicsPipelineLibraryFeaturesEXT((VkPhysicalDeviceGraphicsPipelineLibraryFeaturesEXT*)pNext);
+                break;
+            }
             case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_MODULE_IDENTIFIER_FEATURES_EXT: {
                 bufferSize += 4;
                 bufferSize += vt_sizeof_VkPhysicalDeviceShaderModuleIdentifierFeaturesEXT((VkPhysicalDeviceShaderModuleIdentifierFeaturesEXT*)pNext);
@@ -19394,6 +19530,14 @@ static inline void vt_serialize_VkDeviceCreateInfo(VkDeviceCreateInfo* val, char
                     *(int*)(outputBuffer + bufferOffset) = itemSize;
                     bufferOffset += 4;
                     vt_serialize_VkPhysicalDeviceDynamicRenderingFeatures((VkPhysicalDeviceDynamicRenderingFeatures*)pNext, outputBuffer + bufferOffset);
+                    bufferOffset += itemSize;
+                    break;
+                }
+                case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_GRAPHICS_PIPELINE_LIBRARY_FEATURES_EXT: {
+                    int itemSize = vt_sizeof_VkPhysicalDeviceGraphicsPipelineLibraryFeaturesEXT((VkPhysicalDeviceGraphicsPipelineLibraryFeaturesEXT*)pNext);
+                    *(int*)(outputBuffer + bufferOffset) = itemSize;
+                    bufferOffset += 4;
+                    vt_serialize_VkPhysicalDeviceGraphicsPipelineLibraryFeaturesEXT((VkPhysicalDeviceGraphicsPipelineLibraryFeaturesEXT*)pNext, outputBuffer + bufferOffset);
                     bufferOffset += itemSize;
                     break;
                 }
@@ -20371,6 +20515,22 @@ static inline void vt_unserialize_VkDeviceCreateInfo(VkDeviceCreateInfo* val, ch
                     VkPhysicalDeviceDynamicRenderingFeatures* item = !pNextIsNULL ? findNextVkStructure(val->pNext, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES) : NULL;
                     if (!item) item = mp_alloc(memoryPool, sizeof(VkPhysicalDeviceDynamicRenderingFeatures));
                     vt_unserialize_VkPhysicalDeviceDynamicRenderingFeatures(item, inputBuffer + bufferOffset, memoryPool);
+                    bufferOffset += itemSize;
+
+                    if (pNextIsNULL) {
+                        item->pNext = pNext;
+                        pNext = item;
+                    }
+                }
+                break;
+            }
+            case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_GRAPHICS_PIPELINE_LIBRARY_FEATURES_EXT: {
+                int itemSize = *(int*)(inputBuffer + bufferOffset);
+                bufferOffset += 4;
+                if (itemSize > 0) {
+                    VkPhysicalDeviceGraphicsPipelineLibraryFeaturesEXT* item = !pNextIsNULL ? findNextVkStructure(val->pNext, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_GRAPHICS_PIPELINE_LIBRARY_FEATURES_EXT) : NULL;
+                    if (!item) item = mp_alloc(memoryPool, sizeof(VkPhysicalDeviceGraphicsPipelineLibraryFeaturesEXT));
+                    vt_unserialize_VkPhysicalDeviceGraphicsPipelineLibraryFeaturesEXT(item, inputBuffer + bufferOffset, memoryPool);
                     bufferOffset += itemSize;
 
                     if (pNextIsNULL) {
@@ -22607,6 +22767,11 @@ static inline int vt_sizeof_VkGraphicsPipelineCreateInfo(VkGraphicsPipelineCreat
                 bufferSize += vt_sizeof_VkPipelineRenderingCreateInfo((VkPipelineRenderingCreateInfo*)pNext);
                 break;
             }
+            case VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_LIBRARY_CREATE_INFO_EXT: {
+                bufferSize += 4;
+                bufferSize += vt_sizeof_VkGraphicsPipelineLibraryCreateInfoEXT((VkGraphicsPipelineLibraryCreateInfoEXT*)pNext);
+                break;
+            }
             default: {
                 bufferSize += 4;
                 break;
@@ -22666,6 +22831,14 @@ static inline void vt_serialize_VkGraphicsPipelineCreateInfo(VkGraphicsPipelineC
                     *(int*)(outputBuffer + bufferOffset) = itemSize;
                     bufferOffset += 4;
                     vt_serialize_VkPipelineRenderingCreateInfo((VkPipelineRenderingCreateInfo*)pNext, outputBuffer + bufferOffset);
+                    bufferOffset += itemSize;
+                    break;
+                }
+                case VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_LIBRARY_CREATE_INFO_EXT: {
+                    int itemSize = vt_sizeof_VkGraphicsPipelineLibraryCreateInfoEXT((VkGraphicsPipelineLibraryCreateInfoEXT*)pNext);
+                    *(int*)(outputBuffer + bufferOffset) = itemSize;
+                    bufferOffset += 4;
+                    vt_serialize_VkGraphicsPipelineLibraryCreateInfoEXT((VkGraphicsPipelineLibraryCreateInfoEXT*)pNext, outputBuffer + bufferOffset);
                     bufferOffset += itemSize;
                     break;
                 }
@@ -22881,6 +23054,22 @@ static inline void vt_unserialize_VkGraphicsPipelineCreateInfo(VkGraphicsPipelin
                     VkPipelineRenderingCreateInfo* item = !pNextIsNULL ? findNextVkStructure(val->pNext, VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO) : NULL;
                     if (!item) item = mp_alloc(memoryPool, sizeof(VkPipelineRenderingCreateInfo));
                     vt_unserialize_VkPipelineRenderingCreateInfo(item, inputBuffer + bufferOffset, memoryPool);
+                    bufferOffset += itemSize;
+
+                    if (pNextIsNULL) {
+                        item->pNext = pNext;
+                        pNext = item;
+                    }
+                }
+                break;
+            }
+            case VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_LIBRARY_CREATE_INFO_EXT: {
+                int itemSize = *(int*)(inputBuffer + bufferOffset);
+                bufferOffset += 4;
+                if (itemSize > 0) {
+                    VkGraphicsPipelineLibraryCreateInfoEXT* item = !pNextIsNULL ? findNextVkStructure(val->pNext, VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_LIBRARY_CREATE_INFO_EXT) : NULL;
+                    if (!item) item = mp_alloc(memoryPool, sizeof(VkGraphicsPipelineLibraryCreateInfoEXT));
+                    vt_unserialize_VkGraphicsPipelineLibraryCreateInfoEXT(item, inputBuffer + bufferOffset, memoryPool);
                     bufferOffset += itemSize;
 
                     if (pNextIsNULL) {
