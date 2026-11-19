@@ -642,3 +642,64 @@ void ArrayDeque_free(ArrayDeque* arrayDeque, bool freeValues) {
     arrayDeque->tail = 0;
     arrayDeque->size = 0;
 }
+
+int ArraySet_indexOf(ArraySet* arraySet, void* value) {
+    if (!arraySet->values) return -1;
+    const uint64_t key = (uint64_t)value;
+    int lo = 0, hi = arraySet->size - 1;
+
+    while (lo <= hi) {
+        int mid = (lo + hi) >> 1;
+        uint64_t midKey = (uint64_t)arraySet->values[mid];
+
+        if (midKey < key) lo = mid + 1;
+        else if (midKey > key) hi = mid - 1;
+        else return mid;
+    }
+    return ~lo;
+}
+
+void ArraySet_put(ArraySet* arraySet, void* value) {
+    int index = ArraySet_indexOf(arraySet, value);
+    if (index >= 0) {
+        arraySet->values[index] = value;
+        return;
+    }
+
+    index = ~index;
+    ENSURE_ARRAY_CAPACITY(arraySet->size + 1, arraySet->capacity, arraySet->values, sizeof(void*));
+
+    if (index < arraySet->size) {
+        memmove(arraySet->values + index + 1, arraySet->values + index, (arraySet->size - index) * sizeof(void*));
+    }
+
+    arraySet->values[index] = value;
+    arraySet->size++;
+}
+
+void ArraySet_removeAt(ArraySet* arraySet, int index) {
+    if (index < 0 || index >= arraySet->size) return;
+    memmove(arraySet->values + index, arraySet->values + index + 1, (arraySet->size - (index + 1)) * sizeof(void*));
+    arraySet->size--;
+    arraySet->values[arraySet->size] = NULL;
+}
+
+void ArraySet_remove(ArraySet* arraySet, void* value) {
+    int index = ArraySet_indexOf(arraySet, value);
+    ArraySet_removeAt(arraySet, index);
+}
+
+void ArraySet_free(ArraySet* arraySet, bool freeValues) {
+    if (arraySet->values) {
+        if (freeValues) {
+            for (int i = 0; i < arraySet->capacity; i++) {
+                if (arraySet->values[i]) free(arraySet->values[i]);
+            }
+        }
+        free(arraySet->values);
+        arraySet->values = NULL;
+    }
+
+    arraySet->size = 0;
+    arraySet->capacity = 0;
+}

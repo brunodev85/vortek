@@ -154,6 +154,18 @@ extern void* ArrayDeque_getFirst(ArrayDeque* arrayDeque);
 extern void* ArrayDeque_getLast(ArrayDeque* arrayDeque);
 extern void ArrayDeque_free(ArrayDeque* arrayDeque, bool freeValues);
 
+typedef struct ArraySet {
+    int size;
+    int capacity;
+    void** values;
+} ArraySet;
+
+extern int ArraySet_indexOf(ArraySet* arraySet, void* value);
+extern void ArraySet_put(ArraySet* arraySet, void* value);
+extern void ArraySet_removeAt(ArraySet* arraySet, int index);
+extern void ArraySet_remove(ArraySet* arraySet, void* value);
+extern void ArraySet_free(ArraySet* arraySet, bool freeValues);
+
 #define DEFAULT_ARRAY_CAPACITY 4
 #define ENSURE_ARRAY_CAPACITY(targetSize, capacity, elements, elementSize) \
     do { \
