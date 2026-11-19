@@ -3509,7 +3509,11 @@ PFN_vkVoidFunction vk_icdGetInstanceProcAddr(VkInstance instance, const char* pN
     return findVkDispatchFuncWithName(pName);
 }
 
+PFN_vkVoidFunction vk_icdGetPhysicalDeviceProcAddr(VkInstance instance, const char* pName) {
+    return NULL;
+}
+
 VkResult vk_icdNegotiateLoaderICDInterfaceVersion(uint32_t* pSupportedVersion) {
-    *pSupportedVersion = 3;
+    *pSupportedVersion = 5;
     return VK_SUCCESS;
 }
