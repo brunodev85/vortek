@@ -69,7 +69,7 @@ static inline int recv_fds(int sockFd, int* outFds, int* outNumFds, void* outDat
     return res;
 }
 
-static inline int sock_read(int fd, char* buffer, int size) {
+static inline int sock_read(int fd, void* buffer, int size) {
     char *ptr = buffer;
     int left;
     int result;
@@ -86,7 +86,7 @@ static inline int sock_read(int fd, char* buffer, int size) {
     return size;
 }
 
-static inline int sock_write(int fd, char* buffer, int size) {
+static inline int sock_write(int fd, void* buffer, int size) {
     char *ptr = buffer;
     int left;
     int result;

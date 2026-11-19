@@ -16,4 +16,5 @@ add_library(vulkan_vortek SHARED
             src/vk_object_pool.c
             src/arrays.c
             src/descriptor_update_template.c
-            src/ring_buffer.c)
+            src/ring_buffer.c
+            src/async_pipeline_manager.c)

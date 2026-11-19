@@ -5,6 +5,7 @@
 #include "vortek_serializer.h"
 #include "descriptor_update_template.h"
 #include "vk_object_pool.h"
+#include "async_pipeline_manager.h"
 #include "vulkan/vk_icd.h"
 #include "vulkan/vk_layer.h"
 
@@ -23,23 +24,6 @@ static pthread_mutex_t vt_call_mutex = PTHREAD_MUTEX_INITIALIZER;
 #define VT_CALL_UNLOCK() \
     mp_free(&globalMemoryPool); \
     pthread_mutex_unlock(&vt_call_mutex);
-
-static VkResult waitForPipelineCreation(ringid_t ringId, int pipelineCount, VkPipeline* pPipelines) {
-    int bufferSize = sizeof(VkResult) + pipelineCount * VK_HANDLE_BYTE_COUNT;
-    char inputBuffer[bufferSize];
-
-    if (!RingBuffer_read(globalRingPool[ringId].ring, inputBuffer, bufferSize)) return VK_ERROR_DEVICE_LOST;
-    globalRingPool[ringId].acquired = false;
-
-    int result = *(int*)(inputBuffer + 0);
-    for (int i = 0, j = sizeof(VkResult); i < pipelineCount; i++, j += VK_HANDLE_BYTE_COUNT) {
-        uint64_t pipelineId = *(uint64_t*)(inputBuffer + j);
-        VkObject* pipelineObject = VkObject_create(VK_OBJECT_TYPE_PIPELINE, pipelineId);
-        pPipelines[i] = VkObject_toHandle(pipelineObject);
-    }
-
-    return (VkResult)result;
-}
 
 VkResult vt_call_vkCreateInstance(const VkInstanceCreateInfo* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkInstance* pInstance) {
     VT_CALL_LOCK();
@@ -964,7 +948,7 @@ VkResult vt_call_vkCreateGraphicsPipelines(VkDevice device, VkPipelineCache pipe
     VT_SEND_CHECKED(REQUEST_CODE_VK_CREATE_GRAPHICS_PIPELINES, VT_RETURN);
     VT_CALL_UNLOCK();
 
-    return waitForPipelineCreation(ringId, createInfoCount, pPipelines);
+    return AsyncPipelineManager_waitForCreation(ringId, createInfoCount, pPipelines);
 }
 
 VkResult vt_call_vkCreateComputePipelines(VkDevice device, VkPipelineCache pipelineCache, uint32_t createInfoCount, const VkComputePipelineCreateInfo* pCreateInfos, const VkAllocationCallbacks* pAllocator, VkPipeline* pPipelines) {
@@ -984,7 +968,7 @@ VkResult vt_call_vkCreateComputePipelines(VkDevice device, VkPipelineCache pipel
     VT_SEND_CHECKED(REQUEST_CODE_VK_CREATE_COMPUTE_PIPELINES, VT_RETURN);
     VT_CALL_UNLOCK();
 
-    return waitForPipelineCreation(ringId, createInfoCount, pPipelines);
+    return AsyncPipelineManager_waitForCreation(ringId, createInfoCount, pPipelines);
 }
 
 void vt_call_vkDestroyPipeline(VkDevice device, VkPipeline pipeline, const VkAllocationCallbacks* pAllocator) {
@@ -1356,7 +1340,8 @@ VkResult vt_call_vkBeginCommandBuffer(VkCommandBuffer commandBuffer, const VkCom
     CommandBatch* batch = commandBufferObject->tag;
     *(uint64_t*)(batch->buffer) = commandBufferObject->id;
     batch->size = VK_HANDLE_BYTE_COUNT;
-    
+    batch->skipCmdDraw = false;
+
     VT_SERIALIZE_CMD(vkBeginCommandBuffer, (VkCommandBuffer)&commandBufferObject->id, pBeginInfo);
     VT_SEND_CHECKED(REQUEST_CODE_VK_BEGIN_COMMAND_BUFFER, VT_RETURN);
     
@@ -1399,6 +1384,14 @@ void vt_call_vkCmdBindPipeline(VkCommandBuffer commandBuffer, VkPipelineBindPoin
     VkObject* pipelineObject = VkObject_fromHandle(pipeline);
 
     CommandBatch* batch = commandBufferObject->tag;
+    batch->skipCmdDraw = false;
+    if (pipelineObject->tag == VK_HANDLE_NOT_READY) {
+        VT_CALL_LOCK();
+        if (!AsyncPipelineManager_checkIfReady(pipelineObject)) batch->skipCmdDraw = true;
+        VT_CALL_UNLOCK();
+        if (batch->skipCmdDraw) return;
+    }
+
     VT_CMD_ENQUEUE(vkCmdBindPipeline, REQUEST_CODE_VK_CMD_BIND_PIPELINE, batch, (VkCommandBuffer)&commandBufferObject->id, pipelineBindPoint, (VkPipeline)&pipelineObject->id);
 }
 
@@ -1492,6 +1485,8 @@ void vt_call_vkCmdDraw(VkCommandBuffer commandBuffer, uint32_t vertexCount, uint
     VkObject* commandBufferObject = VkObject_fromHandle(commandBuffer);
 
     CommandBatch* batch = commandBufferObject->tag;
+    if (batch->skipCmdDraw) return;
+
     VT_CMD_ENQUEUE(vkCmdDraw, REQUEST_CODE_VK_CMD_DRAW, batch, (VkCommandBuffer)&commandBufferObject->id, vertexCount, instanceCount, firstVertex, firstInstance);
 }
 
@@ -1499,6 +1494,8 @@ void vt_call_vkCmdDrawIndexed(VkCommandBuffer commandBuffer, uint32_t indexCount
     VkObject* commandBufferObject = VkObject_fromHandle(commandBuffer);
 
     CommandBatch* batch = commandBufferObject->tag;
+    if (batch->skipCmdDraw) return;
+
     VT_CMD_ENQUEUE(vkCmdDrawIndexed, REQUEST_CODE_VK_CMD_DRAW_INDEXED, batch, (VkCommandBuffer)&commandBufferObject->id, indexCount, instanceCount, firstIndex, vertexOffset, firstInstance);
 }
 
@@ -1507,6 +1504,8 @@ void vt_call_vkCmdDrawIndirect(VkCommandBuffer commandBuffer, VkBuffer buffer, V
     VkObject* bufferObject = VkObject_fromHandle(buffer);
 
     CommandBatch* batch = commandBufferObject->tag;
+    if (batch->skipCmdDraw) return;
+
     VT_CMD_ENQUEUE(vkCmdDrawIndirect, REQUEST_CODE_VK_CMD_DRAW_INDIRECT, batch, (VkCommandBuffer)&commandBufferObject->id, (VkBuffer)&bufferObject->id, offset, drawCount, stride);
 }
 
@@ -1515,6 +1514,8 @@ void vt_call_vkCmdDrawIndexedIndirect(VkCommandBuffer commandBuffer, VkBuffer bu
     VkObject* bufferObject = VkObject_fromHandle(buffer);
 
     CommandBatch* batch = commandBufferObject->tag;
+    if (batch->skipCmdDraw) return;
+
     VT_CMD_ENQUEUE(vkCmdDrawIndexedIndirect, REQUEST_CODE_VK_CMD_DRAW_INDEXED_INDIRECT, batch, (VkCommandBuffer)&commandBufferObject->id, (VkBuffer)&bufferObject->id, offset, drawCount, stride);
 }
 
@@ -1661,6 +1662,8 @@ void vt_call_vkCmdBeginQuery(VkCommandBuffer commandBuffer, VkQueryPool queryPoo
     VkObject* queryPoolObject = VkObject_fromHandle(queryPool);
 
     CommandBatch* batch = commandBufferObject->tag;
+    if (batch->skipCmdDraw) return;
+
     VT_CMD_ENQUEUE(vkCmdBeginQuery, REQUEST_CODE_VK_CMD_BEGIN_QUERY, batch, (VkCommandBuffer)&commandBufferObject->id, (VkQueryPool)&queryPoolObject->id, query, flags);
 }
 
@@ -1669,6 +1672,8 @@ void vt_call_vkCmdEndQuery(VkCommandBuffer commandBuffer, VkQueryPool queryPool,
     VkObject* queryPoolObject = VkObject_fromHandle(queryPool);
 
     CommandBatch* batch = commandBufferObject->tag;
+    if (batch->skipCmdDraw) return;
+
     VT_CMD_ENQUEUE(vkCmdEndQuery, REQUEST_CODE_VK_CMD_END_QUERY, batch, (VkCommandBuffer)&commandBufferObject->id, (VkQueryPool)&queryPoolObject->id, query);
 }
 
@@ -2531,6 +2536,8 @@ void vt_call_vkCmdDrawIndirectCount(VkCommandBuffer commandBuffer, VkBuffer buff
     VkObject* countBufferObject = VkObject_fromHandle(countBuffer);
 
     CommandBatch* batch = commandBufferObject->tag;
+    if (batch->skipCmdDraw) return;
+
     VT_CMD_ENQUEUE(vkCmdDrawIndirectCount, REQUEST_CODE_VK_CMD_DRAW_INDIRECT_COUNT, batch, (VkCommandBuffer)&commandBufferObject->id, (VkBuffer)&bufferObject->id, offset, (VkBuffer)&countBufferObject->id, countBufferOffset, maxDrawCount, stride);
 }
 
@@ -2540,6 +2547,8 @@ void vt_call_vkCmdDrawIndexedIndirectCount(VkCommandBuffer commandBuffer, VkBuff
     VkObject* countBufferObject = VkObject_fromHandle(countBuffer);
 
     CommandBatch* batch = commandBufferObject->tag;
+    if (batch->skipCmdDraw) return;
+
     VT_CMD_ENQUEUE(vkCmdDrawIndexedIndirectCount, REQUEST_CODE_VK_CMD_DRAW_INDEXED_INDIRECT_COUNT, batch, (VkCommandBuffer)&commandBufferObject->id, (VkBuffer)&bufferObject->id, offset, (VkBuffer)&countBufferObject->id, countBufferOffset, maxDrawCount, stride);
 }
 
@@ -2554,6 +2563,8 @@ void vt_call_vkCmdBeginTransformFeedbackEXT(VkCommandBuffer commandBuffer, uint3
     VkObject* commandBufferObject = VkObject_fromHandle(commandBuffer);
 
     CommandBatch* batch = commandBufferObject->tag;
+    if (batch->skipCmdDraw) return;
+
     VT_CMD_ENQUEUE(vkCmdBeginTransformFeedbackEXT, REQUEST_CODE_VK_CMD_BEGIN_TRANSFORM_FEEDBACK_EXT, batch, (VkCommandBuffer)&commandBufferObject->id, firstCounterBuffer, counterBufferCount, pCounterBuffers, pCounterBufferOffsets);
 }
 
@@ -2561,6 +2572,8 @@ void vt_call_vkCmdEndTransformFeedbackEXT(VkCommandBuffer commandBuffer, uint32_
     VkObject* commandBufferObject = VkObject_fromHandle(commandBuffer);
 
     CommandBatch* batch = commandBufferObject->tag;
+    if (batch->skipCmdDraw) return;
+
     VT_CMD_ENQUEUE(vkCmdEndTransformFeedbackEXT, REQUEST_CODE_VK_CMD_END_TRANSFORM_FEEDBACK_EXT, batch, (VkCommandBuffer)&commandBufferObject->id, firstCounterBuffer, counterBufferCount, pCounterBuffers, pCounterBufferOffsets);
 }
 
@@ -2569,6 +2582,8 @@ void vt_call_vkCmdBeginQueryIndexedEXT(VkCommandBuffer commandBuffer, VkQueryPoo
     VkObject* queryPoolObject = VkObject_fromHandle(queryPool);
 
     CommandBatch* batch = commandBufferObject->tag;
+    if (batch->skipCmdDraw) return;
+
     VT_CMD_ENQUEUE(vkCmdBeginQueryIndexedEXT, REQUEST_CODE_VK_CMD_BEGIN_QUERY_INDEXED_EXT, batch, (VkCommandBuffer)&commandBufferObject->id, (VkQueryPool)&queryPoolObject->id, query, flags, index);
 }
 
@@ -2577,6 +2592,8 @@ void vt_call_vkCmdEndQueryIndexedEXT(VkCommandBuffer commandBuffer, VkQueryPool 
     VkObject* queryPoolObject = VkObject_fromHandle(queryPool);
 
     CommandBatch* batch = commandBufferObject->tag;
+    if (batch->skipCmdDraw) return;
+
     VT_CMD_ENQUEUE(vkCmdEndQueryIndexedEXT, REQUEST_CODE_VK_CMD_END_QUERY_INDEXED_EXT, batch, (VkCommandBuffer)&commandBufferObject->id, (VkQueryPool)&queryPoolObject->id, query, index);
 }
 
@@ -2585,6 +2602,8 @@ void vt_call_vkCmdDrawIndirectByteCountEXT(VkCommandBuffer commandBuffer, uint32
     VkObject* counterBufferObject = VkObject_fromHandle(counterBuffer);
 
     CommandBatch* batch = commandBufferObject->tag;
+    if (batch->skipCmdDraw) return;
+
     VT_CMD_ENQUEUE(vkCmdDrawIndirectByteCountEXT, REQUEST_CODE_VK_CMD_DRAW_INDIRECT_BYTE_COUNT_EXT, batch, (VkCommandBuffer)&commandBufferObject->id, instanceCount, firstInstance, (VkBuffer)&counterBufferObject->id, counterBufferOffset, counterOffset, vertexStride);
 }
 
@@ -3388,8 +3407,12 @@ static const struct VulkanFunc vkDispatchTable[] = {
     {"vkCmdEndQueryIndexedEXT", vt_call_vkCmdEndQueryIndexedEXT},
     {"vkCmdDrawIndirectByteCountEXT", vt_call_vkCmdDrawIndirectByteCountEXT},
     {"vkGetBufferOpaqueCaptureAddress", vt_call_vkGetBufferOpaqueCaptureAddress},
+    {"vkGetBufferOpaqueCaptureAddressKHR", vt_call_vkGetBufferOpaqueCaptureAddress},
     {"vkGetBufferDeviceAddress", vt_call_vkGetBufferDeviceAddress},
+    {"vkGetBufferDeviceAddressKHR", vt_call_vkGetBufferDeviceAddress},
+    {"vkGetBufferDeviceAddressEXT", vt_call_vkGetBufferDeviceAddress},
     {"vkGetDeviceMemoryOpaqueCaptureAddress", vt_call_vkGetDeviceMemoryOpaqueCaptureAddress},
+    {"vkGetDeviceMemoryOpaqueCaptureAddressKHR", vt_call_vkGetDeviceMemoryOpaqueCaptureAddress},
     {"vkCmdSetLineStippleKHR", vt_call_vkCmdSetLineStippleKHR},
     {"vkCmdSetLineStippleEXT", vt_call_vkCmdSetLineStippleKHR},
     {"vkGetPhysicalDeviceToolProperties", vt_call_vkGetPhysicalDeviceToolProperties},

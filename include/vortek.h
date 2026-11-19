@@ -1,6 +1,6 @@
 #define HEADER_SIZE 8
 #define DEVICE_NAME "Vortek (%s)"
-#define ENABLE_VALIDATION_LAYER 0 // FIXME set to 0 and remove libVkLayer from jniLibs
+#define ENABLE_VALIDATION_LAYER 0 // FIXME set to 0 and remove libVkLayer_khronos_validation.so from jniLibs
 #define DEBUG_MODE 0 // FIXME set to 0
 #define MEMORY_POOL_MAX_SIZE 65536
 #define SERVER_RING_BUFFER_SIZE 4194304
@@ -147,6 +147,7 @@ typedef struct CommandBatch {
     char* buffer;
     int capacity;
     int size;
+    bool skipCmdDraw;
 } CommandBatch;
 
 extern bool vortekInitOnce();
